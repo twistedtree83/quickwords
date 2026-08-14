@@ -1,7 +1,8 @@
 import { score } from './pipeline/scorer'
 import { compile } from './pipeline/choreographer'
 import { renderFrame, wordsVisibleAt } from './pipeline/renderer'
-import { record } from './pipeline/capture'
+import { record, type Recording } from './pipeline/capture'
+import { extensionFor, isAwkwardToUpload } from './pipeline/formats'
 import { DEFAULT_PRESET } from './pipeline/presets'
 import type { RenderDiagnostics } from './diagnostics'
 
@@ -51,11 +52,29 @@ renderButton.addEventListener('click', async () => {
   download(recording.blob, recording.mimeType)
 
   renderButton.disabled = false
-  status.textContent = `Done — ${(recording.blob.size / 1024).toFixed(0)} KB, ${recording.mimeType}, ${recording.droppedFrames} dropped frames.`
+  status.textContent = describe(recording)
 })
 
+function describe(recording: Recording): string {
+  const size = `${(recording.blob.size / 1024).toFixed(0)} KB`
+  const parts = [`Done — ${extensionFor(recording.mimeType)}, ${size}.`]
+
+  if (isAwkwardToUpload(recording.mimeType)) {
+    parts.push(
+      'This browser can only record WebM. The file works, but some platforms reject it — Chrome or Safari will give you an MP4.',
+    )
+  }
+  if (recording.droppedFrames > 0) {
+    parts.push(
+      `${recording.droppedFrames} frames dropped — worth re-rendering if it looks uneven.`,
+    )
+  }
+
+  return parts.join(' ')
+}
+
 function download(blob: Blob, mimeType: string): void {
-  const extension = mimeType.includes('mp4') ? 'mp4' : 'webm'
+  const extension = extensionFor(mimeType)
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

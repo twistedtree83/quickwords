@@ -69,6 +69,42 @@ test('records for as long as the timeline says it should', async ({ page }) => {
   expect(Math.abs(elapsedMs - timelineDurationMs)).toBeLessThan(200)
 })
 
+test('negotiates MP4 in a browser that can record it', async ({ page }) => {
+  await page.goto('/')
+
+  const mp4Capable = await page.evaluate(() =>
+    MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E'),
+  )
+  test.skip(!mp4Capable, 'this browser cannot record MP4')
+
+  await page.getByRole('textbox').fill(TEXT)
+  await page.getByRole('button', { name: /render/i }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
+      timeout: 60_000,
+    })
+    .toBeGreaterThan(0)
+
+  const { mimeType } = (await page.evaluate(() => window.__kinetic))!
+  expect(mimeType).toMatch(/^video\/mp4/)
+})
+
+test('names the downloaded file for the format it actually recorded', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await page.getByRole('textbox').fill(TEXT)
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: /render/i }).click()
+  const download = await downloadPromise
+
+  const { mimeType } = (await page.evaluate(() => window.__kinetic))!
+  const expected = mimeType.includes('mp4') ? '.mp4' : '.webm'
+
+  expect(download.suggestedFilename().endsWith(expected)).toBe(true)
+})
+
 test('draws every pasted word at some point during the render', async ({
   page,
 }) => {

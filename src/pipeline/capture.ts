@@ -1,4 +1,13 @@
+import { negotiateMimeType } from './formats'
 import type { Timeline } from './types'
+
+/** Thrown when the browser can record no format we are willing to hand over. */
+export class UnsupportedRecordingError extends Error {
+  constructor() {
+    super('This browser cannot record video from a canvas.')
+    this.name = 'UnsupportedRecordingError'
+  }
+}
 
 export type Recording = {
   blob: Blob
@@ -25,8 +34,13 @@ export async function record(
   timeline: Timeline,
   draw: DrawFrame,
 ): Promise<Recording> {
+  const negotiated = negotiateMimeType((type) =>
+    MediaRecorder.isTypeSupported(type),
+  )
+  if (negotiated === null) throw new UnsupportedRecordingError()
+
   const stream = canvas.captureStream(timeline.fps)
-  const recorder = new MediaRecorder(stream)
+  const recorder = new MediaRecorder(stream, { mimeType: negotiated })
 
   const chunks: Blob[] = []
   recorder.ondataavailable = (event) => {
@@ -62,7 +76,8 @@ export async function record(
   recorder.stop()
   await stopped
 
-  const mimeType = recorder.mimeType
+  // What the recorder reports, not what we asked for — never assumed.
+  const mimeType = recorder.mimeType || negotiated
   const expectedFrames = Math.round((timeline.durationMs / 1000) * timeline.fps)
 
   return {
