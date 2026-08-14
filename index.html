@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kinetic — text in, video out</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app__head">
+        <h1>Kinetic</h1>
+        <p class="app__tagline">Paste text. Get a vertical video.</p>
+      </header>
+
+      <section class="app__controls">
+        <label class="visually-hidden" for="text">Text to animate</label>
+        <textarea
+          id="text"
+          rows="5"
+          placeholder="Paste the thing you were going to post as plain text."
+        ></textarea>
+
+        <button id="render" type="button">Render</button>
+        <p id="status" class="status" role="status"></p>
+      </section>
+
+      <section class="app__stage">
+        <canvas id="preview" width="1080" height="1920"></canvas>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
