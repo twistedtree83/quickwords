@@ -3,7 +3,7 @@ import { compile } from './pipeline/choreographer'
 import { renderFrame, wordsVisibleAt } from './pipeline/renderer'
 import { record, type Recording } from './pipeline/capture'
 import { extensionFor, isAwkwardToUpload } from './pipeline/formats'
-import { DEFAULT_PRESET } from './pipeline/presets'
+import { DEFAULT_PRESET, presetById } from './pipeline/presets'
 import { canRecord, describeProblem } from './pipeline/guards'
 import { mountPicker } from './picker'
 import type { RenderDiagnostics } from './diagnostics'
@@ -20,10 +20,34 @@ const status = document.querySelector<HTMLParagraphElement>('#status')!
 const picker = document.querySelector<HTMLFieldSetElement>('#picker')!
 const tempo = document.querySelector<HTMLInputElement>('#tempo')!
 const tempoValue = document.querySelector<HTMLOutputElement>('#tempo-value')!
+const savedLink = document.querySelector<HTMLAnchorElement>('#saved-link')!
+const savedLinkWrap = document.querySelector<HTMLParagraphElement>('#saved-link-wrap')!
 const canvas = document.querySelector<HTMLCanvasElement>('#preview')!
 const ctx = canvas.getContext('2d')!
 
-let preset = DEFAULT_PRESET
+/** Only the two choices persist. No accounts, no saved projects, no history. */
+const REMEMBERED = { preset: 'kinetic.preset', tempo: 'kinetic.tempo' } as const
+
+const remembered = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    // Private browsing or blocked storage: a forgotten preference is not worth
+    // breaking the page over.
+    return null
+  }
+}
+
+const remember = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* see above */
+  }
+}
+
+let preset = presetById(remembered(REMEMBERED.preset) ?? DEFAULT_PRESET.id)
+tempo.value = remembered(REMEMBERED.tempo) ?? tempo.value
 
 const bpm = () => Number(tempo.value)
 const sampleText = () => textarea.value.trim() || 'paste your text'
@@ -38,10 +62,14 @@ function updatePreview(): void {
 
 mountPicker(picker, preset.id, (chosen) => {
   preset = chosen
+  remember(REMEMBERED.preset, chosen.id)
   updatePreview()
 })
 
-tempo.addEventListener('input', updatePreview)
+tempo.addEventListener('input', () => {
+  remember(REMEMBERED.tempo, tempo.value)
+  updatePreview()
+})
 textarea.addEventListener('input', () => {
   updatePreview()
   // Warn while typing, so an over-long post is trimmed before the wait rather
@@ -142,14 +170,25 @@ function describe(recording: Recording): string {
   return parts.join(' ')
 }
 
+let lastObjectUrl: string | null = null
+
 function download(blob: Blob, mimeType: string): void {
-  const extension = extensionFor(mimeType)
+  const filename = `kinetic.${extensionFor(mimeType)}`
+
+  if (lastObjectUrl !== null) URL.revokeObjectURL(lastObjectUrl)
   const url = URL.createObjectURL(blob)
+  lastObjectUrl = url
+
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `kinetic.${extension}`
+  anchor.download = filename
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
-  URL.revokeObjectURL(url)
+
+  // The URL is deliberately not revoked here: a dismissed download prompt
+  // would otherwise cost the whole render, so the link stays live.
+  savedLink.href = url
+  savedLink.download = filename
+  savedLinkWrap.hidden = false
 }

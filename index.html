@@ -19,7 +19,8 @@
           id="text"
           rows="5"
           placeholder="Paste the thing you were going to post as plain text."
-        ></textarea>
+        >We cut the build from 11 minutes to 40 seconds. Nobody asked us to, and no customer will ever notice. But the support queue is quieter now.</textarea
+        >
 
         <fieldset class="picker" id="picker">
           <legend class="visually-hidden">Look</legend>
@@ -40,7 +41,15 @@
 
         <button id="render" type="button">Render</button>
         <p id="status" class="status" role="status"></p>
+        <p class="saved-link" hidden id="saved-link-wrap">
+          <a id="saved-link" download>Download the last render again</a>
+        </p>
       </section>
+
+      <p class="privacy">
+        Your text never leaves this browser. There is no server, no account and
+        nothing saved anywhere but your own machine.
+      </p>
 
       <section class="app__stage">
         <canvas id="preview" width="1080" height="1920"></canvas>
