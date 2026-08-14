@@ -31,14 +31,38 @@ export type Timeline = {
   events: TimelineEvent[]
 }
 
-/** Every visual decision, as data. No renderer branches on preset identity. */
+/**
+ * How a phrase arrives on screen. A *family*, not a per-preset special case —
+ * the Renderer may branch on this, and on nothing else about a preset.
+ */
+export type TransitionFamily = 'cut' | 'fade' | 'rise'
+
+export type EasingFamily = 'linear' | 'outCubic'
+
+/**
+ * Every visual decision, as data.
+ *
+ * Adding a preset must be a new object in an array, never a new code path. If
+ * a preset cannot be expressed without a conditional in the Renderer, the
+ * model is missing an axis — extend it rather than branching.
+ */
 export type Preset = {
   id: string
   name: string
+
   background: string
   color: string
   emphasisColor: string
+
   fontStack: string
+  weightOrdinary: number
+  weightEmphasis: number
+  baseFontPx: number
+  emphasisScale: number
+  lineHeightRatio: number
+
+  transition: TransitionFamily
+  easing: EasingFamily
 }
 
 export type CompileOptions = {
