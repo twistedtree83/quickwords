@@ -32,6 +32,12 @@ renderButton.addEventListener('click', async () => {
   renderButton.disabled = true
   status.textContent = 'Recording…'
 
+  // Canvas silently substitutes a fallback for a web font that has not
+  // finished loading: the preview looks right, the video looks wrong, and
+  // nothing anywhere reports a problem. Gate the first draw on it.
+  await document.fonts.ready
+  const fontsReadyAtFirstDraw = document.fonts.status === 'loaded'
+
   const wordsDrawn = new Set<string>()
   const recording = await record(canvas, timeline, (tMs) => {
     renderFrame(timeline, tMs, ctx, DEFAULT_PRESET)
@@ -47,6 +53,7 @@ renderButton.addEventListener('click', async () => {
     elapsedMs: recording.elapsedMs,
     timelineDurationMs: timeline.durationMs,
     wordsDrawn: [...wordsDrawn],
+    fontsReadyAtFirstDraw,
   }
 
   download(recording.blob, recording.mimeType)

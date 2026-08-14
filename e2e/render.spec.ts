@@ -69,6 +69,23 @@ test('records for as long as the timeline says it should', async ({ page }) => {
   expect(Math.abs(elapsedMs - timelineDurationMs)).toBeLessThan(200)
 })
 
+test('does not draw a frame before fonts have resolved', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('textbox').fill(TEXT)
+  await page.getByRole('button', { name: /render/i }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
+      timeout: 60_000,
+    })
+    .toBeGreaterThan(0)
+
+  const { fontsReadyAtFirstDraw } = (await page.evaluate(
+    () => window.__kinetic,
+  ))!
+
+  expect(fontsReadyAtFirstDraw).toBe(true)
+})
+
 test('negotiates MP4 in a browser that can record it', async ({ page }) => {
   await page.goto('/')
 

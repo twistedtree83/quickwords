@@ -4,6 +4,7 @@ import { compile } from './choreographer'
 import { renderFrame } from './renderer'
 import { DEFAULT_PRESET } from './presets'
 import { recordingContext } from './testing/recording-context'
+import { fontPxFrom } from './testing/font-string'
 
 const timelineFor = (text: string) =>
   compile(score(text), DEFAULT_PRESET, { bpm: 120 })
@@ -30,7 +31,7 @@ describe('the Renderer makes emphasis visible', () => {
     Math.max(
       ...calls
         .filter((call) => call.op === 'set:font')
-        .map((call) => Number.parseFloat(String(call.args[0]))),
+        .map((call) => fontPxFrom(call.args[0])),
     )
 
   it('draws an emphasised word differently from a plain one', () => {

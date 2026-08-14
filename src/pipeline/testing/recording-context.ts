@@ -6,9 +6,10 @@
  * and asserts the thing that actually matters — that a given timestamp always
  * produces the same drawing.
  */
-export type DrawCall = { op: string; args: unknown[] }
+import { AVERAGE_GLYPH_WIDTH } from '../typography'
+import { fontPxFrom } from './font-string'
 
-const AVERAGE_GLYPH_WIDTH = 0.55
+export type DrawCall = { op: string; args: unknown[] }
 
 export function recordingContext(): {
   ctx: CanvasRenderingContext2D
@@ -25,10 +26,10 @@ export function recordingContext(): {
 
         // Reads the Renderer legitimately needs answered, not recorded.
         if (key === 'measureText') {
-          return (text: string) => {
-            const size = Number.parseFloat(String(state.font ?? '16px')) || 16
-            return { width: text.length * size * AVERAGE_GLYPH_WIDTH }
-          }
+          return (text: string) => ({
+            width:
+              text.length * fontPxFrom(state.font) * AVERAGE_GLYPH_WIDTH,
+          })
         }
         if (key in state) return state[key]
 

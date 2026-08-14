@@ -15,4 +15,7 @@ export type RenderDiagnostics = {
   elapsedMs: number
   timelineDurationMs: number
   wordsDrawn: string[]
+  /** Canvas substitutes a fallback silently for a font that has not loaded, so
+   *  this is a correctness signal, not a diagnostic nicety. */
+  fontsReadyAtFirstDraw: boolean
 }
