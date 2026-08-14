@@ -4,6 +4,7 @@ import { renderFrame, wordsVisibleAt } from './pipeline/renderer'
 import { record, type Recording } from './pipeline/capture'
 import { extensionFor, isAwkwardToUpload } from './pipeline/formats'
 import { DEFAULT_PRESET } from './pipeline/presets'
+import { mountPicker } from './picker'
 import type { RenderDiagnostics } from './diagnostics'
 
 declare global {
@@ -15,10 +16,26 @@ declare global {
 const textarea = document.querySelector<HTMLTextAreaElement>('#text')!
 const renderButton = document.querySelector<HTMLButtonElement>('#render')!
 const status = document.querySelector<HTMLParagraphElement>('#status')!
+const picker = document.querySelector<HTMLFieldSetElement>('#picker')!
 const canvas = document.querySelector<HTMLCanvasElement>('#preview')!
 const ctx = canvas.getContext('2d')!
 
 const BPM = 120
+
+let preset = DEFAULT_PRESET
+
+mountPicker(picker, preset.id, (chosen) => {
+  preset = chosen
+  renderFrame(
+    compile(score(sampleText()), preset, { bpm: BPM }),
+    PREVIEW_AT_MS,
+    ctx,
+    preset,
+  )
+})
+
+const sampleText = () => textarea.value.trim() || 'paste your text'
+const PREVIEW_AT_MS = 260
 
 renderButton.addEventListener('click', async () => {
   const text = textarea.value.trim()
@@ -27,7 +44,7 @@ renderButton.addEventListener('click', async () => {
     return
   }
 
-  const timeline = compile(score(text), DEFAULT_PRESET, { bpm: BPM })
+  const timeline = compile(score(text), preset, { bpm: BPM })
 
   renderButton.disabled = true
   status.textContent = 'Recording…'
@@ -40,7 +57,7 @@ renderButton.addEventListener('click', async () => {
 
   const wordsDrawn = new Set<string>()
   const recording = await record(canvas, timeline, (tMs) => {
-    renderFrame(timeline, tMs, ctx, DEFAULT_PRESET)
+    renderFrame(timeline, tMs, ctx, preset)
     for (const event of wordsVisibleAt(timeline, tMs)) wordsDrawn.add(event.text)
   })
 

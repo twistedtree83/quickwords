@@ -77,6 +77,59 @@ button:disabled {
   cursor: progress;
 }
 
+.picker {
+  display: flex;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.swatch {
+  position: relative;
+  display: grid;
+  gap: 0.4rem;
+  justify-items: center;
+  cursor: pointer;
+}
+
+.swatch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.swatch canvas {
+  width: 84px;
+  height: auto;
+  aspect-ratio: 9 / 16;
+  border-radius: 8px;
+  border: 2px solid var(--line);
+  transition: border-color 120ms ease;
+}
+
+.swatch:hover canvas {
+  border-color: #5b5b6b;
+}
+
+.swatch input:checked + canvas {
+  border-color: var(--accent);
+}
+
+.swatch input:focus-visible + canvas {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.swatch__name {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.swatch input:checked ~ .swatch__name {
+  color: var(--ink);
+}
+
 .status {
   margin: 0;
   min-height: 1.5em;
