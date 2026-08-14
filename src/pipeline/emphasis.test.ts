@@ -6,8 +6,7 @@ const emphasised = (text: string) =>
     phrase.words.filter((word) => word.emphasis).map((word) => word.text),
   )
 
-const allWords = (text: string) =>
-  score(text).flatMap((phrase) => phrase.words)
+const allWords = (text: string) => score(text).flatMap((phrase) => phrase.words)
 
 describe('the quantitative claim always lands', () => {
   it('emphasises a bare number', () => {
@@ -81,6 +80,55 @@ describe('malformed author signals degrade gracefully', () => {
 
   it('does not treat a single capital letter as shouting', () => {
     expect(emphasised('I shipped a thing')).not.toContain('I')
+  })
+})
+
+describe('quotation emphasises the span, not every word in it', () => {
+  it('skips stopwords inside a quoted span', () => {
+    const words = emphasised(
+      'he called it "completely unusable on a phone" afterwards',
+    )
+
+    expect(words).toContain('unusable')
+    expect(words).not.toContain('on')
+    expect(words).not.toContain('a')
+  })
+})
+
+describe('a number stays with what it measures', () => {
+  const phraseIndexOf = (text: string, word: string) =>
+    score(text).findIndex((phrase) =>
+      phrase.words.some((w) => w.text === word),
+    )
+
+  it('keeps a number and its unit in the same phrase', () => {
+    const text = 'we cut it down from 11 minutes to 40 seconds'
+
+    expect(phraseIndexOf(text, '40')).toBe(phraseIndexOf(text, 'seconds'))
+  })
+
+  it('keeps a count with the noun it counts', () => {
+    const text = 'the team reviewed all 47 pull requests before lunch'
+
+    expect(phraseIndexOf(text, '47')).toBe(phraseIndexOf(text, 'pull'))
+  })
+})
+
+describe('prose without numbers still finds its anchors', () => {
+  const numberless =
+    'nobody tells you that the hardest part of shipping is deciding what not to build and then living with that decision every day'
+
+  const rateFor = (text: string) => {
+    const words = allWords(text)
+    return words.filter((word) => word.emphasis).length / words.length
+  }
+
+  it('does not leave numberless prose almost entirely flat', () => {
+    expect(rateFor(numberless)).toBeGreaterThan(0.1)
+  })
+
+  it('still does not emphasise most of the sentence', () => {
+    expect(rateFor(numberless)).toBeLessThan(0.45)
   })
 })
 

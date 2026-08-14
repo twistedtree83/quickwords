@@ -1,4 +1,5 @@
 import { CLOSES_QUOTE, OPENS_QUOTE } from './quotes'
+import { bareWord, isStopword, strip } from './stopwords'
 import type { Phrase, Word } from './types'
 
 /**
@@ -42,19 +43,6 @@ const AUTHOR_MARKED = /^\*([^*]+)\*$/
 /** Two letters or more, so "I" and "a" are not mistaken for shouting. */
 const SHOUTED = /^\p{Lu}{2,}$/u
 
-const STOPWORDS = new Set([
-  'a', 'an', 'the', 'and', 'or', 'but', 'so', 'yet', 'nor', 'for',
-  'of', 'to', 'in', 'on', 'at', 'by', 'from', 'with', 'into', 'over',
-  'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am',
-  'it', 'its', 'this', 'that', 'these', 'those', 'there', 'here',
-  'i', 'we', 'you', 'they', 'he', 'she', 'them', 'us', 'me', 'my',
-  'our', 'your', 'their', 'his', 'her',
-  'as', 'if', 'than', 'then', 'when', 'while', 'because',
-  'do', 'does', 'did', 'have', 'has', 'had',
-  'will', 'would', 'can', 'could', 'should', 'may', 'might', 'must',
-  'not', 'no', 'up', 'out', 'about', 'just', 'very',
-])
-
 export function assignEmphasis(phrases: Phrase[]): Phrase[] {
   return phrases.map((phrase, index) => {
     const quoted = quotedPositions(phrase.words)
@@ -64,8 +52,14 @@ export function assignEmphasis(phrases: Phrase[]): Phrase[] {
     const weighed = phrase.words.map((word, position) => {
       const marked = AUTHOR_MARKED.exec(word.text)
       const text = marked ? marked[1]! : word.text
+
+      // Quotation emphasises the span, not every word in it — "on" and "a"
+      // inside a quote are still "on" and "a". An asterisk or shouting is
+      // aimed at one word, so those override suppression; quotation does not.
       const overridden =
-        marked !== null || isShouted(text) || quoted.has(position)
+        marked !== null ||
+        isShouted(text) ||
+        (quoted.has(position) && !isStopword(text))
 
       return {
         ...word,
@@ -75,6 +69,7 @@ export function assignEmphasis(phrases: Phrase[]): Phrase[] {
     })
 
     if (landsHere) liftClosingWord(weighed)
+    liftStrongestWord(weighed)
 
     return {
       ...phrase,
@@ -88,10 +83,8 @@ export function assignEmphasis(phrases: Phrase[]): Phrase[] {
 
 function weigh(token: string): number {
   if (NUMERIC.test(token)) return WEIGHT.numeric
-
-  const bare = bareWord(token)
-  if (STOPWORDS.has(bare)) return WEIGHT.stopword
-  if (bare.length >= LONG_WORD_CHARS) return WEIGHT.long
+  if (isStopword(token)) return WEIGHT.stopword
+  if (bareWord(token).length >= LONG_WORD_CHARS) return WEIGHT.long
 
   return WEIGHT.ordinary
 }
@@ -130,12 +123,31 @@ function quotedPositions(words: Word[]): Set<number> {
 function liftClosingWord(words: Word[]): void {
   for (let index = words.length - 1; index >= 0; index--) {
     const word = words[index]!
-    if (STOPWORDS.has(bareWord(word.text))) continue
+    if (isStopword(word.text)) continue
 
     word.weight = Math.max(word.weight, WEIGHT.sentenceFinal)
     return
   }
 }
 
-const strip = (token: string) => token.replace(/[^\p{L}\p{N}'-]/gu, '')
-const bareWord = (token: string) => strip(token).toLowerCase()
+/**
+ * No frame goes by with nothing to look at.
+ *
+ * Without this the long-word signal is dead weight — it scores below the
+ * threshold, so it can never fire on its own, and prose carrying no numbers
+ * and no author marks comes out almost entirely flat. Lifting the single
+ * strongest word in an otherwise silent phrase is the narrowest fix that
+ * gives the signal somewhere to land.
+ */
+function liftStrongestWord(words: Word[]): void {
+  if (words.some((word) => word.weight >= EMPHASIS_THRESHOLD)) return
+
+  const candidates = words.filter((word) => !isStopword(word.text))
+  if (candidates.length === 0) return
+
+  const strongest = candidates.reduce((best, word) =>
+    word.weight > best.weight ? word : best,
+  )
+  strongest.weight = WEIGHT.sentenceFinal
+}
+

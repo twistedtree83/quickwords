@@ -1,6 +1,7 @@
 import { MAX_PHRASE_CHARS, MAX_PHRASE_WORDS } from './budget'
 import { assignEmphasis } from './emphasis'
 import { CLOSES_QUOTE, OPENS_QUOTE } from './quotes'
+import { isStopword } from './stopwords'
 import type { Phrase, Word } from './types'
 
 /** Sentence-ending punctuation, allowing for a trailing quote or bracket. */
@@ -22,6 +23,7 @@ const CONJUNCTIONS = new Set([
 ])
 
 const CAPITALIZED = /^\p{Lu}/u
+const HAS_DIGIT = /\d/
 
 /** Runaway guard: an unbalanced opening quote must not swallow the rest. */
 const MAX_QUOTED_SPAN_TOKENS = 20
@@ -53,6 +55,7 @@ function gatherAtomicSpans(tokens: string[]): string[][] {
   while (index < tokens.length) {
     const group =
       takeQuotedSpan(tokens, index) ??
+      takeMeasurement(tokens, index) ??
       takeProperNounRun(tokens, index, sentenceStart) ?? [tokens[index]!]
 
     groups.push(group)
@@ -75,6 +78,21 @@ function takeQuotedSpan(tokens: string[], start: number): string[] | null {
 
   // Unbalanced quote: treat it as ordinary text rather than guessing.
   return null
+}
+
+/**
+ * A number and the thing it measures. "40 seconds" is one fact and must not
+ * land on two frames; "3rd at" is not, so a following stopword never binds.
+ */
+function takeMeasurement(tokens: string[], start: number): string[] | null {
+  const number = tokens[start]!
+  if (!HAS_DIGIT.test(number)) return null
+
+  const unit = tokens[start + 1]
+  if (unit === undefined) return null
+  if (HAS_DIGIT.test(unit) || isStopword(unit)) return null
+
+  return [number, unit]
 }
 
 function takeProperNounRun(
