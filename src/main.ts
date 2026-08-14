@@ -4,6 +4,7 @@ import { renderFrame, wordsVisibleAt } from './pipeline/renderer'
 import { record, type Recording } from './pipeline/capture'
 import { extensionFor, isAwkwardToUpload } from './pipeline/formats'
 import { DEFAULT_PRESET } from './pipeline/presets'
+import { canRecord, describeProblem } from './pipeline/guards'
 import { mountPicker } from './picker'
 import type { RenderDiagnostics } from './diagnostics'
 
@@ -41,20 +42,52 @@ mountPicker(picker, preset.id, (chosen) => {
 })
 
 tempo.addEventListener('input', updatePreview)
-textarea.addEventListener('input', updatePreview)
+textarea.addEventListener('input', () => {
+  updatePreview()
+  // Warn while typing, so an over-long post is trimmed before the wait rather
+  // than discovered after it.
+  const problem = describeProblem(textarea.value)
+  status.textContent = textarea.value.trim() === '' ? '' : (problem ?? '')
+})
 updatePreview()
 
+// Checked on arrival, not after the text is pasted and Render is pressed.
+if (!canRecord(window)) {
+  renderButton.disabled = true
+  status.textContent =
+    'This browser cannot record video from a canvas, so Kinetic cannot make you a file. Chrome or Safari will work.'
+}
+
+/** Guards re-entry: a second press must not start an overlapping recording. */
+let rendering = false
+
 renderButton.addEventListener('click', async () => {
+  if (rendering) return
+
+  // Snapshotted here: everything downstream uses this text, so editing the
+  // textarea mid-render cannot produce a file that is half one draft and half
+  // another.
   const text = textarea.value.trim()
-  if (text.length === 0) {
-    status.textContent = 'Paste some text first.'
+
+  const problem = describeProblem(text)
+  if (problem !== null) {
+    status.textContent = problem
     return
   }
 
   const timeline = compile(score(text), preset, { bpm: bpm() })
 
+  rendering = true
   renderButton.disabled = true
   status.textContent = 'Recording…'
+
+  // rAF throttles in a background tab, which can silently truncate or stretch
+  // a real-time recording. Noticed and reported rather than hidden.
+  let backgrounded = false
+  const watchVisibility = () => {
+    if (document.hidden) backgrounded = true
+  }
+  document.addEventListener('visibilitychange', watchVisibility)
 
   // Canvas silently substitutes a fallback for a web font that has not
   // finished loading: the preview looks right, the video looks wrong, and
@@ -80,10 +113,15 @@ renderButton.addEventListener('click', async () => {
     fontsReadyAtFirstDraw,
   }
 
+  document.removeEventListener('visibilitychange', watchVisibility)
+
   download(recording.blob, recording.mimeType)
 
+  rendering = false
   renderButton.disabled = false
-  status.textContent = describe(recording)
+  status.textContent = backgrounded
+    ? 'Done, but the tab was in the background during the render, which can drop or stretch frames. Worth re-rendering with this tab visible.'
+    : describe(recording)
 })
 
 function describe(recording: Recording): string {

@@ -122,6 +122,50 @@ test('names the downloaded file for the format it actually recorded', async ({
   expect(download.suggestedFilename().endsWith(expected)).toBe(true)
 })
 
+test('pressing Render twice produces exactly one recording', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await page.getByRole('textbox').fill(TEXT)
+
+  const downloads: unknown[] = []
+  page.on('download', (download) => downloads.push(download))
+
+  const button = page.getByRole('button', { name: /render/i })
+  await button.click()
+  // Fires while the first render is still in flight.
+  await button.dispatchEvent('click')
+
+  await expect
+    .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
+      timeout: 60_000,
+    })
+    .toBeGreaterThan(0)
+
+  await page.waitForTimeout(1500)
+  expect(downloads).toHaveLength(1)
+})
+
+test('refuses over-long input before starting a render', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('textbox').fill('word '.repeat(200))
+  await page.getByRole('button', { name: /render/i }).click()
+
+  await expect(page.locator('#status')).toContainText(/limit is 120/i)
+  expect(await page.evaluate(() => window.__kinetic)).toBeUndefined()
+})
+
+test('declines right-to-left text rather than mangling it', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await page.getByRole('textbox').fill('שלום עולם')
+  await page.getByRole('button', { name: /render/i }).click()
+
+  await expect(page.locator('#status')).toContainText(/right-to-left/i)
+  expect(await page.evaluate(() => window.__kinetic)).toBeUndefined()
+})
+
 test('draws every pasted word at some point during the render', async ({
   page,
 }) => {
