@@ -23,7 +23,8 @@ describe('the Renderer makes emphasis visible', () => {
       { bpm: 120 },
     )
     const { ctx, calls } = recordingContext()
-    renderFrame(timeline, 10, ctx, DEFAULT_PRESET)
+    const first = timeline.events[0]!
+    renderFrame(timeline, first.onsetMs + first.holdMs / 2, ctx, DEFAULT_PRESET)
     return calls
   }
 

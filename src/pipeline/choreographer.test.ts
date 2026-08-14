@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { score } from './scorer'
-import { compile } from './choreographer'
+import { compile, MIN_VIDEO_MS } from './choreographer'
 import { DEFAULT_PRESET } from './presets'
 import type { Phrase } from './types'
 
@@ -57,29 +57,28 @@ describe('a phrase stays up long enough to read', () => {
     return first[0]!.exitMs - first[0]!.onsetMs
   }
 
+  // Measured on phrase 0 of a multi-phrase fixture: the closing tail-hold and
+  // the platform-minimum clamp both land on the *last* phrase, and would
+  // otherwise equalise two short fixtures and hide the difference.
   it('holds a phrase with more words on screen for longer', () => {
-    expect(displayMs('one two three four five')).toBeGreaterThan(
-      displayMs('one two'),
+    expect(displayMs('one two three four five. a trailing sentence.')).toBeGreaterThan(
+      displayMs('one two. a trailing sentence.'),
     )
   })
 })
 
 describe('emphasis buys time', () => {
   it('holds a phrase carrying an emphasised word longer than one without', () => {
-    const emphasised = compilePhrases([
-      phrase([
-        ['alpha', true],
-        ['beta', false],
-      ]),
-    ])
-    const flat = compilePhrases([
-      phrase([
-        ['alpha', false],
-        ['beta', false],
-      ]),
-    ])
+    const holdOfFirst = (emphasis: boolean) =>
+      compilePhrases([
+        phrase([
+          ['alpha', emphasis],
+          ['beta', false],
+        ]),
+        phrase([['trailing', false]]),
+      ]).events[0]!.holdMs
 
-    expect(emphasised.durationMs).toBeGreaterThan(flat.durationMs)
+    expect(holdOfFirst(true)).toBeGreaterThan(holdOfFirst(false))
   })
 })
 
@@ -126,6 +125,56 @@ describe('punctuation buys rest', () => {
     expect(restAfterFirstPhrase('ship it. measure it')).toBeGreaterThan(
       restAfterFirstPhrase('ship it, measure it'),
     )
+  })
+})
+
+describe('tempo drives pace', () => {
+  it('makes every step up in tempo produce a shorter video', () => {
+    const text = 'we cut the build from 11 minutes to 40 seconds. nobody asked.'
+    const durations = [60, 90, 120, 150, 180].map(
+      (bpm) => timelineFor(text, bpm).durationMs,
+    )
+
+    for (let i = 1; i < durations.length; i++) {
+      expect(durations[i]!).toBeLessThan(durations[i - 1]!)
+    }
+  })
+})
+
+describe('the video is long enough to post', () => {
+  it('clamps a very short input above the platform minimum', () => {
+    expect(timelineFor('Ship it.').durationMs).toBeGreaterThanOrEqual(
+      MIN_VIDEO_MS,
+    )
+  })
+
+  it('does not stretch an already long enough video', () => {
+    const long = timelineFor(
+      'we cut the build from eleven minutes down to forty seconds. nobody asked us to do it. the support queue is quieter now.',
+    )
+    const words = long.events.length
+
+    expect(long.durationMs).toBeGreaterThan(MIN_VIDEO_MS)
+    expect(long.durationMs).toBeLessThan(words * 4000)
+  })
+})
+
+describe('the video does not begin or end mid-motion', () => {
+  const timeline = timelineFor('ship it. then measure it.')
+
+  it('leads in before the first word appears', () => {
+    const firstOnset = Math.min(...timeline.events.map((e) => e.onsetMs))
+    expect(firstOnset).toBeGreaterThan(0)
+  })
+
+  it('still has words on screen at the final moment', () => {
+    const stillUp = timeline.events.filter(
+      (event) =>
+        timeline.durationMs - 1 >= event.onsetMs &&
+        timeline.durationMs - 1 < event.exitMs,
+    )
+
+    expect(stillUp.length).toBeGreaterThan(0)
   })
 })
 

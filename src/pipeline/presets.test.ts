@@ -8,10 +8,12 @@ import type { Preset } from './types'
 
 const TEXT = 'we cut it to 40 seconds'
 
-const drawWith = (preset: Preset, tMs = 300): DrawCall[] => {
+/** `into` is measured from the first phrase's onset — a fixed millisecond
+ *  would now land in the lead-in silence before anything is on screen. */
+const drawWith = (preset: Preset, into = 120): DrawCall[] => {
   const timeline = compile(score(TEXT), preset, { bpm: 120 })
   const { ctx, calls } = recordingContext()
-  renderFrame(timeline, tMs, ctx, preset)
+  renderFrame(timeline, timeline.events[0]!.onsetMs + into, ctx, preset)
   return calls
 }
 
@@ -86,8 +88,8 @@ describe('transition families absorb preset differences', () => {
   )
 
   it('makes fade differ from cut partway into a phrase', () => {
-    expect(drawWith(withTransition('fade'), 20)).not.toEqual(
-      drawWith(withTransition('cut'), 20),
+    expect(drawWith(withTransition('fade'), 10)).not.toEqual(
+      drawWith(withTransition('cut'), 10),
     )
   })
 })

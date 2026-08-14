@@ -17,25 +17,32 @@ const textarea = document.querySelector<HTMLTextAreaElement>('#text')!
 const renderButton = document.querySelector<HTMLButtonElement>('#render')!
 const status = document.querySelector<HTMLParagraphElement>('#status')!
 const picker = document.querySelector<HTMLFieldSetElement>('#picker')!
+const tempo = document.querySelector<HTMLInputElement>('#tempo')!
+const tempoValue = document.querySelector<HTMLOutputElement>('#tempo-value')!
 const canvas = document.querySelector<HTMLCanvasElement>('#preview')!
 const ctx = canvas.getContext('2d')!
 
-const BPM = 120
-
 let preset = DEFAULT_PRESET
+
+const bpm = () => Number(tempo.value)
+const sampleText = () => textarea.value.trim() || 'paste your text'
+
+/** Preview only — no file is produced, so pace can be judged before rendering. */
+function updatePreview(): void {
+  const timeline = compile(score(sampleText()), preset, { bpm: bpm() })
+  const first = timeline.events[0]
+  renderFrame(timeline, first ? first.onsetMs + first.holdMs / 2 : 0, ctx, preset)
+  tempoValue.textContent = `${bpm()} bpm · ${(timeline.durationMs / 1000).toFixed(1)}s`
+}
 
 mountPicker(picker, preset.id, (chosen) => {
   preset = chosen
-  renderFrame(
-    compile(score(sampleText()), preset, { bpm: BPM }),
-    PREVIEW_AT_MS,
-    ctx,
-    preset,
-  )
+  updatePreview()
 })
 
-const sampleText = () => textarea.value.trim() || 'paste your text'
-const PREVIEW_AT_MS = 260
+tempo.addEventListener('input', updatePreview)
+textarea.addEventListener('input', updatePreview)
+updatePreview()
 
 renderButton.addEventListener('click', async () => {
   const text = textarea.value.trim()
@@ -44,7 +51,7 @@ renderButton.addEventListener('click', async () => {
     return
   }
 
-  const timeline = compile(score(text), preset, { bpm: BPM })
+  const timeline = compile(score(text), preset, { bpm: bpm() })
 
   renderButton.disabled = true
   status.textContent = 'Recording…'

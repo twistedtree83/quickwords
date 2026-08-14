@@ -19,6 +19,19 @@ const REST_IN_SUBDIVISIONS: Record<Phrase['breakAfter'], number> = {
   soft: 1,
 }
 
+/** Beat of silence before the first phrase, so the video does not open mid-motion. */
+const LEAD_IN_SUBDIVISIONS = 1
+
+/** The last phrase holds, so a looping feed does not cut it off mid-word. */
+const TAIL_SUBDIVISIONS = 3
+
+/**
+ * Platforms reject very short clips. A two-sentence post must not fail on
+ * upload for being under the floor, so the closing hold absorbs the shortfall
+ * rather than the pacing being distorted to fill it.
+ */
+export const MIN_VIDEO_MS = 3000
+
 /**
  * Compiles scored phrases into absolute time.
  *
@@ -37,27 +50,27 @@ export function compile(
   const subdivisionMs = 60_000 / opts.bpm / SUBDIVISIONS_PER_BEAT
 
   const events: TimelineEvent[] = []
-  let cursorSubdivisions = 0
+  let cursor = LEAD_IN_SUBDIVISIONS
   let wordId = 0
 
   phrases.forEach((phrase, phraseIndex) => {
-    const holdSubdivisions = Math.max(
-      MIN_PHRASE_SUBDIVISIONS,
-      phrase.words.reduce(
-        (total, word) =>
-          total +
-          (word.emphasis
-            ? COST_IN_SUBDIVISIONS.emphasised
-            : COST_IN_SUBDIVISIONS.ordinary),
-        0,
-      ),
-    )
+    const isLast = phraseIndex === phrases.length - 1
+    const hold =
+      Math.max(
+        MIN_PHRASE_SUBDIVISIONS,
+        phrase.words.reduce(
+          (total, word) =>
+            total +
+            (word.emphasis
+              ? COST_IN_SUBDIVISIONS.emphasised
+              : COST_IN_SUBDIVISIONS.ordinary),
+          0,
+        ),
+      ) + (isLast ? TAIL_SUBDIVISIONS : 0)
 
-    const onsetMs = cursorSubdivisions * subdivisionMs
-    const holdMs = holdSubdivisions * subdivisionMs
+    const onsetMs = cursor * subdivisionMs
+    const holdMs = hold * subdivisionMs
 
-    // The phrase shares one frame, so it takes one slot rather than one per
-    // word — but a denser or more emphatic phrase earns longer to be read.
     for (const word of phrase.words) {
       events.push({
         wordId: wordId++,
@@ -70,13 +83,31 @@ export function compile(
       })
     }
 
-    cursorSubdivisions +=
-      holdSubdivisions + REST_IN_SUBDIVISIONS[phrase.breakAfter]
+    cursor += hold + (isLast ? 0 : REST_IN_SUBDIVISIONS[phrase.breakAfter])
   })
 
   return {
-    durationMs: cursorSubdivisions * subdivisionMs,
+    durationMs: clampToFloor(cursor * subdivisionMs, events),
     fps: FPS,
     events,
   }
+}
+
+/**
+ * Extends the closing hold rather than the pacing, so a short post clears the
+ * platform floor without every phrase being slowed to pad it out.
+ */
+function clampToFloor(durationMs: number, events: TimelineEvent[]): number {
+  if (durationMs >= MIN_VIDEO_MS || events.length === 0) return durationMs
+
+  const shortfall = MIN_VIDEO_MS - durationMs
+  const lastPhrase = events[events.length - 1]!.phraseIndex
+
+  for (const event of events) {
+    if (event.phraseIndex !== lastPhrase) continue
+    event.holdMs += shortfall
+    event.exitMs += shortfall
+  }
+
+  return MIN_VIDEO_MS
 }

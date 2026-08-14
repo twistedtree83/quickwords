@@ -25,6 +25,19 @@
           <legend class="visually-hidden">Look</legend>
         </fieldset>
 
+        <div class="tempo">
+          <label for="tempo">Pace</label>
+          <input
+            id="tempo"
+            type="range"
+            min="60"
+            max="200"
+            step="10"
+            value="120"
+          />
+          <output id="tempo-value" for="tempo">120 bpm</output>
+        </div>
+
         <button id="render" type="button">Render</button>
         <p id="status" class="status" role="status"></p>
       </section>
