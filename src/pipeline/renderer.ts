@@ -1,4 +1,5 @@
-import { FRAME_HEIGHT, FRAME_WIDTH, SAFE_HEIGHT, SAFE_WIDTH } from './frame'
+import { FRAME_HEIGHT, FRAME_WIDTH } from './frame'
+import { setPhrase, sizeFor } from './layout'
 import type {
   EasingFamily,
   Preset,
@@ -40,33 +41,23 @@ export function renderFrame(
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
 
-  const scale = fittingScale(phrase, ctx, preset)
-  const lines = phrase.map((event) => ({
-    event,
-    fontPx: sizeFor(event, preset, scale),
-  }))
+  const lines = setPhrase(phrase, preset, (text, fontPx, emphasis) => {
+    const weight = emphasis ? preset.weightEmphasis : preset.weightOrdinary
+    ctx.font = `${weight} ${fontPx}px ${preset.fontStack}`
+    return ctx.measureText(text).width
+  })
 
-  const totalHeight = lines.reduce(
-    (sum, line) => sum + line.fontPx * preset.lineHeightRatio,
-    0,
-  )
   const entry = entryProgress(phrase, tMs, preset)
+  ctx.globalAlpha = alphaFor(preset.transition, entry)
 
-  let top = FRAME_HEIGHT / 2 - totalHeight / 2
+  for (const line of lines) {
+    const dy = offsetFor(preset.transition, entry, line.height)
 
-  for (const { event, fontPx } of lines) {
-    const lineHeight = fontPx * preset.lineHeightRatio
-
-    ctx.globalAlpha = alphaFor(preset.transition, entry)
-    ctx.font = fontFor(event, fontPx, preset)
-    ctx.fillStyle = event.emphasis ? preset.emphasisColor : preset.color
-    ctx.fillText(
-      event.text,
-      FRAME_WIDTH / 2,
-      top + lineHeight / 2 + offsetFor(preset.transition, entry, lineHeight),
-    )
-
-    top += lineHeight
+    for (const word of line.words) {
+      ctx.font = fontFor(word.event, word.fontPx, preset)
+      ctx.fillStyle = word.event.emphasis ? preset.emphasisColor : preset.color
+      ctx.fillText(word.text, word.x, line.y + dy)
+    }
   }
 
   ctx.globalAlpha = 1
@@ -99,42 +90,8 @@ const offsetFor = (
 ): number =>
   family === 'rise' ? (1 - entry) * lineHeight * RISE_DISTANCE : 0
 
-const sizeFor = (event: TimelineEvent, preset: Preset, scale: number) =>
-  (event.emphasis ? preset.baseFontPx * preset.emphasisScale : preset.baseFontPx) *
-  scale
-
 const fontFor = (event: TimelineEvent, fontPx: number, preset: Preset) =>
   `${event.emphasis ? preset.weightEmphasis : preset.weightOrdinary} ${fontPx}px ${preset.fontStack}`
-
-/**
- * How far the whole phrase has to shrink to fit the safe area.
- *
- * Solved for the phrase as a unit rather than per word, so relative emphasis
- * survives the shrink — a long word does not flatten the size difference that
- * makes emphasis readable.
- */
-function fittingScale(
-  phrase: TimelineEvent[],
-  ctx: CanvasRenderingContext2D,
-  preset: Preset,
-): number {
-  let widest = 0
-  for (const event of phrase) {
-    ctx.font = fontFor(event, sizeFor(event, preset, 1), preset)
-    widest = Math.max(widest, ctx.measureText(event.text).width)
-  }
-
-  const tallest = phrase.reduce(
-    (sum, event) => sum + sizeFor(event, preset, 1) * preset.lineHeightRatio,
-    0,
-  )
-
-  const horizontal = widest === 0 ? 1 : SAFE_WIDTH / widest
-  const vertical = tallest === 0 ? 1 : SAFE_HEIGHT / tallest
-
-  // Never scale *up* — the preset's base size is the intended size.
-  return Math.min(1, horizontal, vertical)
-}
 
 /**
  * The words on screen at `tMs`. Derived from the timeline every call rather
@@ -153,3 +110,5 @@ export function wordsVisibleAt(
     (event) => event.phraseIndex === live.phraseIndex,
   )
 }
+
+export { sizeFor }
