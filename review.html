@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kinetic — emphasis review</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/review.css" />
+  </head>
+  <body>
+    <main class="review">
+      <header class="review__head">
+        <h1>Emphasis review</h1>
+        <p class="app__tagline">
+          Every corpus post, scored by the real pipeline. Judge whether the
+          emphasis lands where you would put it.
+        </p>
+        <div id="corpus-status" class="banner"></div>
+        <div id="summary" class="summary"></div>
+      </header>
+
+      <div class="review__body">
+        <ol id="posts" class="posts"></ol>
+
+        <aside class="player">
+          <canvas id="stage" width="1080" height="1920"></canvas>
+          <p id="player-label" class="player__label">
+            Pick a post to watch it animate.
+          </p>
+        </aside>
+      </div>
+    </main>
+
+    <script type="module" src="/src/review.ts"></script>
+  </body>
+</html>
