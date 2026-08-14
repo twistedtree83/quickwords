@@ -1,5 +1,6 @@
 import { MAX_PHRASE_CHARS, MAX_PHRASE_WORDS } from './budget'
 import { assignEmphasis } from './emphasis'
+import { CLOSES_QUOTE, OPENS_QUOTE } from './quotes'
 import type { Phrase, Word } from './types'
 
 /** Sentence-ending punctuation, allowing for a trailing quote or bracket. */
@@ -20,8 +21,6 @@ const CONJUNCTIONS = new Set([
   'then',
 ])
 
-const OPENS_QUOTE = /^["“]/
-const CLOSES_QUOTE = /["”][.,!?;:]*$/
 const CAPITALIZED = /^\p{Lu}/u
 
 /** Runaway guard: an unbalanced opening quote must not swallow the rest. */
