@@ -2,6 +2,8 @@ import { FRAME_HEIGHT, FRAME_WIDTH } from './frame'
 import type { Preset, Timeline, TimelineEvent } from './types'
 
 const BASE_FONT_PX = 120
+/** Emphasis has to survive being seen on a phone, in a feed, while scrolling. */
+const EMPHASIS_SCALE = 1.4
 
 /**
  * Draws exactly one frame for one instant.
@@ -24,17 +26,24 @@ export function renderFrame(
   const phrase = wordsVisibleAt(timeline, tMs)
   if (phrase.length === 0) return
 
-  ctx.font = `${BASE_FONT_PX}px ${preset.fontStack}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
 
-  const lineHeight = BASE_FONT_PX * 1.2
-  const top = FRAME_HEIGHT / 2 - ((phrase.length - 1) * lineHeight) / 2
+  const lines = phrase.map((event) => ({
+    event,
+    fontPx: event.emphasis ? BASE_FONT_PX * EMPHASIS_SCALE : BASE_FONT_PX,
+  }))
 
-  phrase.forEach((event, index) => {
+  const totalHeight = lines.reduce((sum, line) => sum + line.fontPx * 1.2, 0)
+  let baseline = FRAME_HEIGHT / 2 - totalHeight / 2
+
+  for (const { event, fontPx } of lines) {
+    const lineHeight = fontPx * 1.2
+    ctx.font = `${event.emphasis ? '700 ' : '400 '}${fontPx}px ${preset.fontStack}`
     ctx.fillStyle = event.emphasis ? preset.emphasisColor : preset.color
-    ctx.fillText(event.text, FRAME_WIDTH / 2, top + index * lineHeight)
-  })
+    ctx.fillText(event.text, FRAME_WIDTH / 2, baseline + lineHeight / 2)
+    baseline += lineHeight
+  }
 }
 
 /**

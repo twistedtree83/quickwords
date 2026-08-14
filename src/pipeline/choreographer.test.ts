@@ -2,9 +2,26 @@ import { describe, expect, it } from 'vitest'
 import { score } from './scorer'
 import { compile } from './choreographer'
 import { DEFAULT_PRESET } from './presets'
+import type { Phrase } from './types'
 
 const timelineFor = (text: string, bpm = 120) =>
   compile(score(text), DEFAULT_PRESET, { bpm })
+
+/** Hand-built phrases, so Choreographer tests do not depend on the Scorer. */
+const phrase = (
+  words: Array<[text: string, emphasis: boolean]>,
+  breakAfter: Phrase['breakAfter'] = 'soft',
+): Phrase => ({
+  words: words.map(([text, emphasis]) => ({
+    text,
+    weight: emphasis ? 1 : 0.3,
+    emphasis,
+  })),
+  breakAfter,
+})
+
+const compilePhrases = (phrases: Phrase[], bpm = 120) =>
+  compile(phrases, DEFAULT_PRESET, { bpm })
 
 describe('the Choreographer lays words out in time', () => {
   it('gives every word an onset', () => {
@@ -44,6 +61,48 @@ describe('a phrase stays up long enough to read', () => {
     expect(displayMs('one two three four five')).toBeGreaterThan(
       displayMs('one two'),
     )
+  })
+})
+
+describe('emphasis buys time', () => {
+  it('holds a phrase carrying an emphasised word longer than one without', () => {
+    const emphasised = compilePhrases([
+      phrase([
+        ['alpha', true],
+        ['beta', false],
+      ]),
+    ])
+    const flat = compilePhrases([
+      phrase([
+        ['alpha', false],
+        ['beta', false],
+      ]),
+    ])
+
+    expect(emphasised.durationMs).toBeGreaterThan(flat.durationMs)
+  })
+})
+
+describe('onsets land on the beat grid', () => {
+  it('places every onset on a subdivision of the tempo', () => {
+    const bpm = 120
+    const subdivisionMs = 60_000 / bpm / 2
+
+    const timeline = compilePhrases(
+      [
+        phrase([['one', true]], 'hard'),
+        phrase([
+          ['two', false],
+          ['three', true],
+        ]),
+        phrase([['four', false]], 'hard'),
+      ],
+      bpm,
+    )
+
+    for (const event of timeline.events) {
+      expect(event.onsetMs % subdivisionMs).toBe(0)
+    }
   })
 })
 

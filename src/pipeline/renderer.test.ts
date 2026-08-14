@@ -14,6 +14,36 @@ const frameAt = (text: string, tMs: number) => {
   return calls
 }
 
+describe('the Renderer makes emphasis visible', () => {
+  const drawSingleWord = (emphasis: boolean) => {
+    const timeline = compile(
+      [{ words: [{ text: 'alpha', weight: 1, emphasis }], breakAfter: 'soft' }],
+      DEFAULT_PRESET,
+      { bpm: 120 },
+    )
+    const { ctx, calls } = recordingContext()
+    renderFrame(timeline, 10, ctx, DEFAULT_PRESET)
+    return calls
+  }
+
+  const largestFontPx = (calls: ReturnType<typeof drawSingleWord>) =>
+    Math.max(
+      ...calls
+        .filter((call) => call.op === 'set:font')
+        .map((call) => Number.parseFloat(String(call.args[0]))),
+    )
+
+  it('draws an emphasised word differently from a plain one', () => {
+    expect(drawSingleWord(true)).not.toEqual(drawSingleWord(false))
+  })
+
+  it('draws an emphasised word larger, so it reads on a phone', () => {
+    expect(largestFontPx(drawSingleWord(true))).toBeGreaterThan(
+      largestFontPx(drawSingleWord(false)),
+    )
+  })
+})
+
 describe('the Renderer holds no state between frames', () => {
   it('draws an identical frame for the same timestamp', () => {
     expect(frameAt('hello world', 250)).toEqual(frameAt('hello world', 250))

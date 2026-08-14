@@ -1,4 +1,5 @@
 import { MAX_PHRASE_CHARS, MAX_PHRASE_WORDS } from './budget'
+import { assignEmphasis } from './emphasis'
 import type { Phrase, Word } from './types'
 
 /** Sentence-ending punctuation, allowing for a trailing quote or bracket. */
@@ -37,7 +38,7 @@ const MAX_QUOTED_SPAN_TOKENS = 20
  */
 export function score(text: string): Phrase[] {
   const tokens = text.split(/\s+/).filter((token) => token.length > 0)
-  return packIntoPhrases(gatherAtomicSpans(tokens))
+  return assignEmphasis(packIntoPhrases(gatherAtomicSpans(tokens)))
 }
 
 /**

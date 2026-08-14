@@ -14,7 +14,15 @@ declare global {
  * 720x1280 or reopening the offline-encoder decision, both of which are
  * architectural calls for a human.
  */
-const LONG_INPUT = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ')
+/** Ordinary prose, not synthetic tokens — a fixture of `word0 word1 …` would
+ *  read as all-numeric and emphasise every word, which is not the real load. */
+const LONG_INPUT = [
+  'We rewrote the export pipeline over a single weekend.',
+  'The old one took eleven minutes and failed silently whenever a column was missing.',
+  'The new one finishes in under twenty seconds, and it tells you exactly what went wrong.',
+  'Nobody asked us to do it, and no customer will ever notice.',
+  'But the support queue is quieter now, and that was the whole point.',
+].join(' ')
 
 test('sustains its frame budget through a long render at 1080x1920', async ({
   page,
