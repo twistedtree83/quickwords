@@ -34,6 +34,42 @@ describe('the Choreographer lays words out in time', () => {
   })
 })
 
+describe('a phrase stays up long enough to read', () => {
+  const displayMs = (text: string) => {
+    const first = timelineFor(text).events.filter((e) => e.phraseIndex === 0)
+    return first[0]!.exitMs - first[0]!.onsetMs
+  }
+
+  it('holds a phrase with more words on screen for longer', () => {
+    expect(displayMs('one two three four five')).toBeGreaterThan(
+      displayMs('one two'),
+    )
+  })
+})
+
+describe('punctuation buys rest', () => {
+  const restAfterFirstPhrase = (text: string) => {
+    const timeline = timelineFor(text)
+    const first = timeline.events.filter((e) => e.phraseIndex === 0)
+    const second = timeline.events.filter((e) => e.phraseIndex === 1)
+
+    return (
+      Math.min(...second.map((e) => e.onsetMs)) -
+      Math.max(...first.map((e) => e.exitMs))
+    )
+  }
+
+  it('rests after a phrase rather than running straight on', () => {
+    expect(restAfterFirstPhrase('ship it, measure it')).toBeGreaterThan(0)
+  })
+
+  it('rests longer after a full stop than after a comma', () => {
+    expect(restAfterFirstPhrase('ship it. measure it')).toBeGreaterThan(
+      restAfterFirstPhrase('ship it, measure it'),
+    )
+  })
+})
+
 describe('the Choreographer is deterministic', () => {
   it('compiles the same timeline for the same input and tempo', () => {
     expect(timelineFor('ship it then measure it')).toEqual(
