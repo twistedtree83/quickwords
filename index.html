@@ -41,9 +41,6 @@
 
         <button id="render" type="button">Render</button>
         <p id="status" class="status" role="status"></p>
-        <p class="saved-link" hidden id="saved-link-wrap">
-          <a id="saved-link" download>Download the last render again</a>
-        </p>
       </section>
 
       <p class="privacy">
@@ -53,6 +50,16 @@
 
       <section class="app__stage">
         <canvas id="preview" width="1080" height="1920"></canvas>
+
+        <div id="result" class="result" hidden>
+          <video id="result-video" playsinline controls loop></video>
+          <div class="result__actions">
+            <a id="download" class="button" download>Download</a>
+            <button id="discard" class="button button--quiet" type="button">
+              Back to preview
+            </button>
+          </div>
+        </div>
       </section>
     </main>
 

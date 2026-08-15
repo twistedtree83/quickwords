@@ -10,7 +10,7 @@ Paste text. Get a 9:16 kinetic-typography video. Under a minute, entirely in the
 
 You wrote something worth posting. Making it a video takes forty minutes in Canva, so you post the plain text instead, or nothing.
 
-Kinetic takes the text and gives back a file. No timeline, no layer panel, no project to save, no account. **From paste to downloaded file in under a minute, with three interactions.**
+Kinetic takes the text and gives you a video to watch, then a button to save it. No timeline, no layer panel, no project to save, no account. **From paste to finished video in under a minute, with three interactions.**
 
 The part that makes it feel like more than a template filler: it reads the text before it animates it. It decides which words carry the sentence — the numbers, the names, the one verb it turns on — and gives those the emphasis while the connective tissue slips past. You didn't mark anything up.
 

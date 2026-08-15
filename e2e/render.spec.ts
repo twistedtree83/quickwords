@@ -9,26 +9,70 @@ declare global {
 
 const TEXT = 'shipping beats polishing every single time'
 
-test('turns pasted text into a downloadable video file', async ({ page }) => {
+/** Renders and waits for the result panel. Nothing downloads on its own. */
+async function render(page: import('@playwright/test').Page, text = TEXT) {
+  await page.getByRole('textbox').fill(text)
+  await page.getByRole('button', { name: /^render$/i }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
+      timeout: 60_000,
+    })
+    .toBeGreaterThan(0)
+}
+
+test('offers the finished video for playback rather than downloading it', async ({
+  page,
+}) => {
   await page.goto('/')
-  await page.getByRole('textbox').fill(TEXT)
+  await render(page)
+
+  // The result replaces the preview, playable in place.
+  await expect(page.locator('#result-video')).toBeVisible()
+  await expect(page.locator('#result-video')).toHaveAttribute('src', /^blob:/)
+  await expect(page.locator('#preview')).toBeHidden()
+})
+
+test('does not download anything until asked', async ({ page }) => {
+  await page.goto('/')
+
+  const downloads: unknown[] = []
+  page.on('download', (download) => downloads.push(download))
+
+  await render(page)
+  await page.waitForTimeout(1000)
+
+  expect(downloads).toHaveLength(0)
+})
+
+test('downloads the file when the download button is pressed', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await render(page)
 
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('link', { name: /download/i }).click()
   const download = await downloadPromise
 
-  const path = await download.path()
-  expect(path).toBeTruthy()
+  expect(await download.path()).toBeTruthy()
+})
 
-  const diagnostics = await page.evaluate(() => window.__kinetic)
-  expect(diagnostics).toBeDefined()
-  expect(diagnostics!.byteLength).toBeGreaterThan(0)
+test('returns to the live preview when the result is dismissed', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await render(page)
+
+  await page.getByRole('button', { name: /back to preview/i }).click()
+
+  await expect(page.locator('#preview')).toBeVisible()
+  await expect(page.locator('#result-video')).toBeHidden()
 })
 
 test('records at 1080x1920', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('textbox').fill(TEXT)
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('button', { name: /^render$/i }).click()
   await expect
     .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
       timeout: 60_000,
@@ -55,7 +99,7 @@ test('records at 1080x1920', async ({ page }) => {
 test('records for as long as the timeline says it should', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('textbox').fill(TEXT)
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('button', { name: /^render$/i }).click()
   await expect
     .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
       timeout: 60_000,
@@ -72,7 +116,7 @@ test('records for as long as the timeline says it should', async ({ page }) => {
 test('does not draw a frame before fonts have resolved', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('textbox').fill(TEXT)
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('button', { name: /^render$/i }).click()
   await expect
     .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
       timeout: 60_000,
@@ -95,7 +139,7 @@ test('negotiates MP4 in a browser that can record it', async ({ page }) => {
   test.skip(!mp4Capable, 'this browser cannot record MP4')
 
   await page.getByRole('textbox').fill(TEXT)
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('button', { name: /^render$/i }).click()
   await expect
     .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
       timeout: 60_000,
@@ -110,10 +154,10 @@ test('names the downloaded file for the format it actually recorded', async ({
   page,
 }) => {
   await page.goto('/')
-  await page.getByRole('textbox').fill(TEXT)
+  await render(page)
 
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('link', { name: /download/i }).click()
   const download = await downloadPromise
 
   const { mimeType } = (await page.evaluate(() => window.__kinetic))!
@@ -128,10 +172,7 @@ test('pressing Render twice produces exactly one recording', async ({
   await page.goto('/')
   await page.getByRole('textbox').fill(TEXT)
 
-  const downloads: unknown[] = []
-  page.on('download', (download) => downloads.push(download))
-
-  const button = page.getByRole('button', { name: /render/i })
+  const button = page.getByRole('button', { name: /^render$/i })
   await button.click()
   // Fires while the first render is still in flight.
   await button.dispatchEvent('click')
@@ -143,13 +184,13 @@ test('pressing Render twice produces exactly one recording', async ({
     .toBeGreaterThan(0)
 
   await page.waitForTimeout(1500)
-  expect(downloads).toHaveLength(1)
+  expect(await page.evaluate(() => window.__kinetic!.renderCount)).toBe(1)
 })
 
 test('refuses over-long input before starting a render', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('textbox').fill('word '.repeat(200))
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('button', { name: /^render$/i }).click()
 
   await expect(page.locator('#status')).toContainText(/limit is 120/i)
   expect(await page.evaluate(() => window.__kinetic)).toBeUndefined()
@@ -160,7 +201,7 @@ test('declines right-to-left text rather than mangling it', async ({
 }) => {
   await page.goto('/')
   await page.getByRole('textbox').fill('שלום עולם')
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('button', { name: /^render$/i }).click()
 
   await expect(page.locator('#status')).toContainText(/right-to-left/i)
   expect(await page.evaluate(() => window.__kinetic)).toBeUndefined()
@@ -171,7 +212,7 @@ test('draws every pasted word at some point during the render', async ({
 }) => {
   await page.goto('/')
   await page.getByRole('textbox').fill(TEXT)
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('button', { name: /^render$/i }).click()
   await expect
     .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
       timeout: 60_000,

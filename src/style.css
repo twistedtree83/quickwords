@@ -162,15 +162,6 @@ button:disabled {
   max-width: 46ch;
 }
 
-.saved-link {
-  margin: 0;
-  font-size: 0.85rem;
-}
-
-.saved-link a {
-  color: var(--accent);
-}
-
 .app__stage {
   display: flex;
   justify-content: center;
@@ -183,6 +174,57 @@ canvas {
   border-radius: 16px;
   border: 1px solid var(--line);
   background: #0b0b0f;
+}
+
+.result {
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+}
+
+.result[hidden] {
+  display: none;
+}
+
+.result video {
+  width: min(300px, 70vw);
+  height: auto;
+  aspect-ratio: 9 / 16;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: #0b0b0f;
+}
+
+.result__actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+/* The download is an anchor, so it needs the button's look applied by hand. */
+.button {
+  display: inline-block;
+  padding: 0.7rem 1.6rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button--quiet {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.button--quiet:hover {
+  color: var(--ink);
+  border-color: #4a4a58;
 }
 
 .visually-hidden {

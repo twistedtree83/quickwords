@@ -20,8 +20,10 @@ const status = document.querySelector<HTMLParagraphElement>('#status')!
 const picker = document.querySelector<HTMLFieldSetElement>('#picker')!
 const tempo = document.querySelector<HTMLInputElement>('#tempo')!
 const tempoValue = document.querySelector<HTMLOutputElement>('#tempo-value')!
-const savedLink = document.querySelector<HTMLAnchorElement>('#saved-link')!
-const savedLinkWrap = document.querySelector<HTMLParagraphElement>('#saved-link-wrap')!
+const result = document.querySelector<HTMLDivElement>('#result')!
+const resultVideo = document.querySelector<HTMLVideoElement>('#result-video')!
+const downloadLink = document.querySelector<HTMLAnchorElement>('#download')!
+const discardButton = document.querySelector<HTMLButtonElement>('#discard')!
 const canvas = document.querySelector<HTMLCanvasElement>('#preview')!
 const ctx = canvas.getContext('2d')!
 
@@ -54,11 +56,26 @@ const sampleText = () => textarea.value.trim() || 'paste your text'
 
 /** Preview only — no file is produced, so pace can be judged before rendering. */
 function updatePreview(): void {
+  showPreview()
   const timeline = compile(score(sampleText()), preset, { bpm: bpm() })
   const first = timeline.events[0]
   renderFrame(timeline, first ? first.onsetMs + first.holdMs / 2 : 0, ctx, preset)
   tempoValue.textContent = `${bpm()} bpm · ${(timeline.durationMs / 1000).toFixed(1)}s`
 }
+
+/** The canvas and the finished video occupy the same place; never both. */
+function showPreview(): void {
+  result.hidden = true
+  canvas.hidden = false
+  resultVideo.pause()
+}
+
+function showResult(): void {
+  canvas.hidden = true
+  result.hidden = false
+}
+
+discardButton.addEventListener('click', showPreview)
 
 mountPicker(picker, preset.id, (chosen) => {
   preset = chosen
@@ -88,6 +105,7 @@ if (!canRecord(window)) {
 
 /** Guards re-entry: a second press must not start an overlapping recording. */
 let rendering = false
+let renderCount = 0
 
 renderButton.addEventListener('click', async () => {
   if (rendering) return
@@ -129,8 +147,10 @@ renderButton.addEventListener('click', async () => {
     for (const event of wordsVisibleAt(timeline, tMs)) wordsDrawn.add(event.text)
   })
 
+  renderCount += 1
   window.__kinetic = {
     blob: recording.blob,
+    renderCount,
     byteLength: recording.blob.size,
     mimeType: recording.mimeType,
     droppedFrames: recording.droppedFrames,
@@ -143,7 +163,7 @@ renderButton.addEventListener('click', async () => {
 
   document.removeEventListener('visibilitychange', watchVisibility)
 
-  download(recording.blob, recording.mimeType)
+  offerResult(recording.blob, recording.mimeType)
 
   rendering = false
   renderButton.disabled = false
@@ -172,23 +192,27 @@ function describe(recording: Recording): string {
 
 let lastObjectUrl: string | null = null
 
-function download(blob: Blob, mimeType: string): void {
-  const filename = `kinetic.${extensionFor(mimeType)}`
-
+/**
+ * Hands the finished video back to be watched, and offers the download.
+ *
+ * Nothing is saved without being asked for. A file that appears in Downloads
+ * unbidden is a file you have not seen yet — and the first thing anyone wants
+ * after a render is to find out whether it is any good.
+ *
+ * The object URL is revoked only when the next render replaces it, so the
+ * video and the download link both stay live for as long as they are on screen.
+ */
+function offerResult(blob: Blob, mimeType: string): void {
   if (lastObjectUrl !== null) URL.revokeObjectURL(lastObjectUrl)
   const url = URL.createObjectURL(blob)
   lastObjectUrl = url
 
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  document.body.append(anchor)
-  anchor.click()
-  anchor.remove()
+  downloadLink.href = url
+  downloadLink.download = `kinetic.${extensionFor(mimeType)}`
 
-  // The URL is deliberately not revoked here: a dismissed download prompt
-  // would otherwise cost the whole render, so the link stays live.
-  savedLink.href = url
-  savedLink.download = filename
-  savedLinkWrap.hidden = false
+  resultVideo.src = url
+  showResult()
+  // Autoplay is allowed because the video is muted — it carries no audio track
+  // at all. A rejected play promise just leaves the controls waiting.
+  void resultVideo.play().catch(() => {})
 }

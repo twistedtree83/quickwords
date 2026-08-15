@@ -15,11 +15,14 @@ test('a first-time visitor can render without typing anything', async ({
   const textarea = page.getByRole('textbox')
   await expect(textarea).not.toBeEmpty()
 
-  const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: /render/i }).click()
-  const download = await downloadPromise
+  await page.getByRole('button', { name: /^render$/i }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
+      timeout: 60_000,
+    })
+    .toBeGreaterThan(0)
 
-  expect(await download.path()).toBeTruthy()
+  await expect(page.locator('#result-video')).toBeVisible()
 })
 
 test('shows a preview before any file is produced', async ({ page }) => {
@@ -37,11 +40,9 @@ test('shows a preview before any file is produced', async ({ page }) => {
   expect(await page.evaluate(() => window.__kinetic)).toBeUndefined()
 })
 
-test('keeps the last render available after the prompt is gone', async ({
-  page,
-}) => {
+test('keeps the render available to watch and download', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('button', { name: /^render$/i }).click()
 
   await expect
     .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
@@ -49,9 +50,21 @@ test('keeps the last render available after the prompt is gone', async ({
     })
     .toBeGreaterThan(0)
 
-  const link = page.locator('#saved-link')
+  const link = page.locator('#download')
   await expect(link).toBeVisible()
   await expect(link).toHaveAttribute('href', /^blob:/)
+
+  // Playable, not merely present.
+  const playable = await page.evaluate(async () => {
+    const video = document.querySelector<HTMLVideoElement>('#result-video')!
+    if (video.readyState >= 1) return video.videoWidth > 0
+    await new Promise((resolve) => {
+      video.onloadedmetadata = resolve
+    })
+    return video.videoWidth > 0
+  })
+
+  expect(playable).toBe(true)
 })
 
 test('remembers preset and tempo, and nothing else', async ({ page }) => {
@@ -79,7 +92,7 @@ test('states plainly that text never leaves the browser', async ({ page }) => {
 
 test('produces a video with no audio track', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: /render/i }).click()
+  await page.getByRole('button', { name: /^render$/i }).click()
 
   await expect
     .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {

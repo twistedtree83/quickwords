@@ -15,6 +15,9 @@ export type RenderDiagnostics = {
   elapsedMs: number
   timelineDurationMs: number
   wordsDrawn: string[]
+  /** Completed renders this session. The re-entry guard is tested against it,
+   *  now that nothing auto-downloads for a test to count. */
+  renderCount: number
   /** Canvas substitutes a fallback silently for a font that has not loaded, so
    *  this is a correctness signal, not a diagnostic nicety. */
   fontsReadyAtFirstDraw: boolean
