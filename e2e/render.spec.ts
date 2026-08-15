@@ -32,6 +32,42 @@ test('offers the finished video for playback rather than downloading it', async 
   await expect(page.locator('#preview')).toBeHidden()
 })
 
+test('shows how far a render has got and how long is left', async ({ page }) => {
+  await page.goto('/')
+  // Long enough that the render is observable rather than a flash.
+  await page.getByRole('textbox').fill(
+    'We cut the build from eleven minutes to forty seconds. Nobody asked us to do it. The support queue is quieter now, and that was the whole point.',
+  )
+  await page.getByRole('button', { name: /^render$/i }).click()
+
+  const bar = page.locator('#progress-bar')
+  await expect(page.locator('#progress')).toBeVisible()
+
+  // Determinate, not a spinner: the value climbs because the duration is known.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            document.querySelector<HTMLProgressElement>('#progress-bar')!.value,
+        ),
+      { timeout: 30_000 },
+    )
+    .toBeGreaterThan(0.15)
+
+  await expect(page.locator('#progress-label')).toContainText(/\d+s left/)
+
+  await expect
+    .poll(() => page.evaluate(() => window.__kinetic?.byteLength ?? 0), {
+      timeout: 60_000,
+    })
+    .toBeGreaterThan(0)
+
+  // Gone once there is a result to look at.
+  await expect(page.locator('#progress')).toBeHidden()
+  await expect(bar).toBeHidden()
+})
+
 test('does not download anything until asked', async ({ page }) => {
   await page.goto('/')
 

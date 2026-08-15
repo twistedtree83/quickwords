@@ -20,6 +20,9 @@ const status = document.querySelector<HTMLParagraphElement>('#status')!
 const picker = document.querySelector<HTMLFieldSetElement>('#picker')!
 const tempo = document.querySelector<HTMLInputElement>('#tempo')!
 const tempoValue = document.querySelector<HTMLOutputElement>('#tempo-value')!
+const progress = document.querySelector<HTMLDivElement>('#progress')!
+const progressBar = document.querySelector<HTMLProgressElement>('#progress-bar')!
+const progressLabel = document.querySelector<HTMLSpanElement>('#progress-label')!
 const result = document.querySelector<HTMLDivElement>('#result')!
 const resultVideo = document.querySelector<HTMLVideoElement>('#result-video')!
 const downloadLink = document.querySelector<HTMLAnchorElement>('#download')!
@@ -107,6 +110,47 @@ if (!canRecord(window)) {
 let rendering = false
 let renderCount = 0
 
+/**
+ * Render progress.
+ *
+ * Determinate rather than a spinner: real-time capture means the render takes
+ * exactly as long as the video, so the remaining time is known rather than
+ * guessed. A spinner would be claiming otherwise.
+ *
+ * The bar is driven from the draw loop, which runs ~60 times a second, so
+ * writes are throttled to whole percent and whole second changes — the DOM
+ * does not need updating sixty times to show the same number.
+ */
+let lastPercent = -1
+let lastSecondsLeft = -1
+
+function startProgress(): void {
+  lastPercent = -1
+  lastSecondsLeft = -1
+  progressBar.value = 0
+  progressLabel.textContent = ''
+  progress.hidden = false
+}
+
+function reportProgress(fraction: number, remainingMs: number): void {
+  const clamped = Math.min(1, Math.max(0, fraction))
+  const percent = Math.round(clamped * 100)
+  const secondsLeft = Math.max(0, Math.ceil(remainingMs / 1000))
+
+  if (percent !== lastPercent) {
+    progressBar.value = clamped
+    lastPercent = percent
+  }
+  if (secondsLeft !== lastSecondsLeft) {
+    progressLabel.textContent = `Recording — ${secondsLeft}s left`
+    lastSecondsLeft = secondsLeft
+  }
+}
+
+function stopProgress(): void {
+  progress.hidden = true
+}
+
 renderButton.addEventListener('click', async () => {
   if (rendering) return
 
@@ -125,7 +169,8 @@ renderButton.addEventListener('click', async () => {
 
   rendering = true
   renderButton.disabled = true
-  status.textContent = 'Recording…'
+  status.textContent = ''
+  startProgress()
 
   // rAF throttles in a background tab, which can silently truncate or stretch
   // a real-time recording. Noticed and reported rather than hidden.
@@ -145,7 +190,10 @@ renderButton.addEventListener('click', async () => {
   const recording = await record(canvas, timeline, (tMs) => {
     renderFrame(timeline, tMs, ctx, preset)
     for (const event of wordsVisibleAt(timeline, tMs)) wordsDrawn.add(event.text)
+    reportProgress(tMs / timeline.durationMs, timeline.durationMs - tMs)
   })
+
+  stopProgress()
 
   renderCount += 1
   window.__kinetic = {
