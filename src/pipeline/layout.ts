@@ -16,16 +16,23 @@ import type { Preset, TimelineEvent } from './types'
 
 /** Short phrases scale up to fill the frame; long ones scale down to fit. */
 const MAX_SCALE = 2.4
-const MIN_SCALE = 0.3
-const SOLVE_STEPS = 20
+/**
+ * Low enough that even a ~200-character URL fits on one line.
+ *
+ * Words are never broken, so the scale is the only thing left to give. For an
+ * unbreakable token that means whole-word integrity is bought at the cost of
+ * legibility — a URL that long lands at roughly 8px in a 1080px frame. That is
+ * a deliberate trade: everything short enough to read stays whole, and nothing
+ * is ever chopped mid-word.
+ */
+const MIN_SCALE = 0.04
+const SOLVE_STEPS = 24
 const FALLBACK_SPACE_RATIO = 0.28
 
 export type SetWord = {
   event: TimelineEvent
-  /** What to draw. Usually the whole word; a piece of it if it had to break. */
-  text: string
   fontPx: number
-  /** Centre of the piece — the Renderer draws with textAlign 'center'. */
+  /** Centre of the word — the Renderer draws with textAlign 'center'. */
   x: number
   width: number
 }
@@ -126,17 +133,17 @@ function wrap(
 
   for (const event of phrase) {
     const fontPx = sizeFor(event, preset, scale)
+    const wordWidth = measure(event.text, fontPx, event.emphasis)
+    const gap = words.length > 0 ? spaceWidth : 0
 
-    for (const piece of breakToFit(event, fontPx, measure)) {
-      const pieceWidth = measure(piece, fontPx, event.emphasis)
-      const gap = words.length > 0 ? spaceWidth : 0
+    // A word that will not fit starts a new line. It is never broken — if it
+    // cannot fit even alone, the scale solve shrinks the whole phrase until it
+    // does.
+    if (words.length > 0 && width + gap + wordWidth > SAFE_WIDTH) flush()
 
-      if (words.length > 0 && width + gap + pieceWidth > SAFE_WIDTH) flush()
-
-      const lead = words.length > 0 ? spaceWidth : 0
-      words.push({ event, text: piece, fontPx, width: pieceWidth })
-      width += lead + pieceWidth
-    }
+    const lead = words.length > 0 ? spaceWidth : 0
+    words.push({ event, fontPx, width: wordWidth })
+    width += lead + wordWidth
   }
 
   flush()
@@ -144,41 +151,6 @@ function wrap(
   return lines.length > 0
     ? lines
     : [{ words: [], width: 0, height: 0, spaceWidth }]
-}
-
-/**
- * A token with nowhere to break — a URL, a hash — is broken across lines by
- * character rather than shrunk into illegibility. Scaling a 200-character URL
- * until it fits one line would put it at about 5px.
- */
-function breakToFit(
-  event: TimelineEvent,
-  fontPx: number,
-  measure: Measure,
-): string[] {
-  if (measure(event.text, fontPx, event.emphasis) <= SAFE_WIDTH) {
-    return [event.text]
-  }
-
-  const pieces: string[] = []
-  let current = ''
-
-  for (const character of event.text) {
-    const candidate = current + character
-    if (
-      current !== '' &&
-      measure(candidate, fontPx, event.emphasis) > SAFE_WIDTH
-    ) {
-      pieces.push(current)
-      current = character
-    } else {
-      current = candidate
-    }
-  }
-
-  if (current !== '') pieces.push(current)
-
-  return pieces
 }
 
 function position(lines: RawLine[], preset: Preset): SetLine[] {

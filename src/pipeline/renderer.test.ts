@@ -18,7 +18,12 @@ const frameAt = (text: string, tMs: number) => {
 describe('the Renderer makes emphasis visible', () => {
   const drawSingleWord = (emphasis: boolean) => {
     const timeline = compile(
-      [{ words: [{ text: 'alpha', weight: 1, emphasis }], breakAfter: 'soft' }],
+      [
+        {
+          words: [{ text: 'alpha', weight: 1, emphasis, link: false }],
+          breakAfter: 'soft',
+        },
+      ],
       DEFAULT_PRESET,
       { bpm: 120 },
     )

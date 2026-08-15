@@ -77,6 +77,7 @@ export function compile(
         phraseIndex,
         text: word.text,
         emphasis: word.emphasis,
+        link: word.link,
         onsetMs,
         holdMs,
         exitMs: onsetMs + holdMs,

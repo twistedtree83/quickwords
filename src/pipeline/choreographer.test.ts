@@ -16,6 +16,7 @@ const phrase = (
     text,
     weight: emphasis ? 1 : 0.3,
     emphasis,
+    link: false,
   })),
   breakAfter,
 })

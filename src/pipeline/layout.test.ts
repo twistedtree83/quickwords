@@ -15,6 +15,29 @@ const firstPhraseFrame = (text: string) => {
   return drawnBoxes(calls)
 }
 
+describe('a word is never split across lines', () => {
+  const LONG_TOKEN = `https://example.com/${'a'.repeat(180)}`
+
+  it('draws an unbreakable token as one whole piece', () => {
+    const drawn = firstPhraseFrame(LONG_TOKEN).map((box) => box.text)
+
+    expect(drawn).toContain(LONG_TOKEN)
+  })
+
+  it('shrinks it to fit rather than breaking it', () => {
+    for (const box of firstPhraseFrame(LONG_TOKEN)) {
+      expect(box.right - box.left).toBeLessThanOrEqual(SAFE_WIDTH)
+    }
+  })
+
+  it('keeps every ordinary word whole too', () => {
+    const text = 'antidisestablishmentarianism beats brevity occasionally'
+    const drawn = firstPhraseFrame(text).map((box) => box.text)
+
+    expect(drawn).toContain('antidisestablishmentarianism')
+  })
+})
+
 describe('a phrase is set as type, not stacked one word per line', () => {
   it('puts more than one word on a line when they fit', () => {
     const boxes = firstPhraseFrame('we cut the build from 11 minutes')

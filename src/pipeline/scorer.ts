@@ -1,6 +1,7 @@
 import { MAX_PHRASE_CHARS, MAX_PHRASE_WORDS } from './budget'
 import { assignEmphasis } from './emphasis'
 import { CLOSES_QUOTE, OPENS_QUOTE } from './quotes'
+import { isLink } from './links'
 import { isStopword } from './stopwords'
 import type { Phrase, Word } from './types'
 
@@ -131,7 +132,7 @@ function packIntoPhrases(groups: string[][]): Phrase[] {
     }
 
     for (const token of group) {
-      pending.push({ text: token, weight: 0, emphasis: false })
+      pending.push({ text: token, weight: 0, emphasis: false, link: isLink(token) })
     }
 
     const last = group[group.length - 1]!

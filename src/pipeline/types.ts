@@ -4,6 +4,8 @@ export type Word = {
   /** 0..1. How much this word carries the sentence. */
   weight: number
   emphasis: boolean
+  /** A URL. Underlined when drawn, since canvas has no text-decoration. */
+  link: boolean
 }
 
 /** A group of words that appear together on screen. */
@@ -19,6 +21,7 @@ export type TimelineEvent = {
   /** Carried on the event so the Renderer is a pure function of (timeline, t). */
   text: string
   emphasis: boolean
+  link: boolean
   onsetMs: number
   holdMs: number
   exitMs: number

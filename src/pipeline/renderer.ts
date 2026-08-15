@@ -14,6 +14,10 @@ const ENTRY_SHARE_OF_HOLD = 0.35
 /** How far a rising phrase travels, as a share of its own line height. */
 const RISE_DISTANCE = 0.45
 
+/** Underline geometry, as shares of the word's own font size. */
+const UNDERLINE_OFFSET = 0.42
+const UNDERLINE_THICKNESS = 0.06
+
 /**
  * Draws exactly one frame for one instant.
  *
@@ -54,9 +58,21 @@ export function renderFrame(
     const dy = offsetFor(preset.transition, entry, line.height)
 
     for (const word of line.words) {
+      const ink = word.event.emphasis ? preset.emphasisColor : preset.color
+
       ctx.font = fontFor(word.event, word.fontPx, preset)
-      ctx.fillStyle = word.event.emphasis ? preset.emphasisColor : preset.color
-      ctx.fillText(word.text, word.x, line.y + dy)
+      ctx.fillStyle = ink
+      ctx.fillText(word.event.text, word.x, line.y + dy)
+
+      // Canvas has no text-decoration, so a link's underline is drawn.
+      if (word.event.link) {
+        ctx.fillRect(
+          word.x - word.width / 2,
+          line.y + dy + word.fontPx * UNDERLINE_OFFSET,
+          word.width,
+          Math.max(1, word.fontPx * UNDERLINE_THICKNESS),
+        )
+      }
     }
   }
 
