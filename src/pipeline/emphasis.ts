@@ -1,5 +1,6 @@
+import { isCommonplace } from './common-words'
 import { CLOSES_QUOTE, OPENS_QUOTE } from './quotes'
-import { bareWord, isStopword, strip } from './stopwords'
+import { bareWord, bareWordPreservingCase, isStopword } from './stopwords'
 import type { Phrase, Word } from './types'
 
 /**
@@ -10,29 +11,46 @@ import type { Phrase, Word } from './types'
  * clone, and the difference between "template filler" and "it understood my
  * sentence."
  *
- * Signals are layered, strongest first:
- *   author (asterisks) > typographic (shouting, quotation) > lexical (digits,
- *   currency, percentages) > positional (the word a sentence lands on) >
- *   morphological (long words) > suppression (stopwords).
+ * Emphasis is *ranked and budgeted*, not thresholded. Every word gets a score
+ * for how much information it carries, and each phrase spends a small budget
+ * on its highest scorers. A threshold made emphasis depend on absolute scores
+ * that had to be retuned whenever a signal changed, and it let signals stack
+ * until three words in a row fired. A budget cannot do that.
  *
- * The ordering is the point. An asterisk-wrapped stopword is emphasised: the
- * explicit signal wins over the suppression rule, because the author knows
- * something the heuristics do not.
+ * Signals, strongest first:
+ *   author marks and quotation are *forced* — they say what the writer meant.
+ *   Everything else competes: numbers, then shouting, then distinctiveness
+ *   (a word not in everyday use), then commonplace words, and stopwords never
+ *   compete at all.
  */
 
-const EMPHASIS_THRESHOLD = 0.6
-
 const WEIGHT = {
-  /** Anything the author marked themselves. Nothing outranks this. */
-  overridden: 1,
-  numeric: 1,
-  sentenceFinal: 0.7,
-  long: 0.55,
-  ordinary: 0.3,
+  /** Author marks and quotation. Never ranked — always emphasised. */
+  forced: 1,
+  numeric: 0.95,
+  shouted: 0.85,
+  distinctive: 0.62,
+  commonplace: 0.35,
   stopword: 0.05,
 } as const
 
-const LONG_WORD_CHARS = 8
+/** A long word is usually a specific one. Breaks ties, never decides alone. */
+const LONG_WORD_CHARS = 9
+const LONG_WORD_BONUS = 0.06
+
+/** The word a sentence lands on gets a nudge, not a coronation. */
+const CLOSING_BONUS = 0.08
+
+/**
+ * One hero word per frame.
+ *
+ * A phrase caps at five words, so this resolves to a single emphasis for
+ * almost every frame. Review at one-in-three put roughly 40% of a post in
+ * bold, and 40% bold reads as no emphasis at all — the eye needs somewhere to
+ * land, not a highlighter. Forced words are exempt: a quoted span is emphasised
+ * whole however long it is.
+ */
+const WORDS_PER_EMPHASIS = 4
 
 /** Any digit at all: covers 47, $12,000, 23%, 3.5x, Q4. */
 const NUMERIC = /\d/
@@ -43,53 +61,115 @@ const AUTHOR_MARKED = /^\*([^*]+)\*$/
 /** Two letters or more, so "I" and "a" are not mistaken for shouting. */
 const SHOUTED = /^\p{Lu}{2,}$/u
 
+type Scored = Word & { forced: boolean; repeat: boolean }
+
 export function assignEmphasis(phrases: Phrase[]): Phrase[] {
+  // Words already given their moment. A key word repeated across a post is
+  // still one idea, and emphasising it every time reads as a stuck highlighter
+  // rather than as a point being made.
+  const alreadyUsed = new Set<string>()
+
   return phrases.map((phrase, index) => {
     const quoted = quotedPositions(phrase.words)
     const landsHere =
       phrase.breakAfter === 'hard' || index === phrases.length - 1
 
-    const weighed = phrase.words.map((word, position) => {
+    const scored: Scored[] = phrase.words.map((word, position) => {
       const marked = AUTHOR_MARKED.exec(word.text)
       const text = marked ? marked[1]! : word.text
 
-      // Quotation emphasises the span, not every word in it — "on" and "a"
-      // inside a quote are still "on" and "a". An asterisk or shouting is
-      // aimed at one word, so those override suppression; quotation does not.
-      const overridden =
-        marked !== null ||
-        isShouted(text) ||
-        (quoted.has(position) && !isStopword(text))
+      // Quotation forces the span it encloses, minus its stopwords — "on" and
+      // "a" inside a quote are still "on" and "a".
+      const forced =
+        marked !== null || (quoted.has(position) && !isStopword(text))
 
       return {
         ...word,
         text,
-        weight: overridden ? WEIGHT.overridden : weigh(text),
+        forced,
+        repeat: alreadyUsed.has(bareWord(text)),
+        weight: forced ? WEIGHT.forced : weigh(text),
+        emphasis: false,
       }
     })
 
-    if (landsHere) liftClosingWord(weighed)
-    liftStrongestWord(weighed)
+    if (landsHere) nudgeClosingWord(scored)
 
-    return {
-      ...phrase,
-      words: weighed.map((word) => ({
-        ...word,
-        emphasis: word.weight >= EMPHASIS_THRESHOLD,
-      })),
+    const spent = spendBudget(scored)
+    for (const word of spent) {
+      if (word.emphasis) alreadyUsed.add(bareWord(word.text))
     }
+
+    return { ...phrase, words: spent.map(stripScoring) }
   })
 }
 
 function weigh(token: string): number {
   if (NUMERIC.test(token)) return WEIGHT.numeric
+  // Shouting is checked before suppression: a deliberate "NOT" in capitals is
+  // the author telling us something, and it outranks the fact that "not" is a
+  // stopword. It still only competes, so an acronym cannot crowd out the
+  // number beside it.
+  if (isShouted(token)) return WEIGHT.shouted
   if (isStopword(token)) return WEIGHT.stopword
-  if (bareWord(token).length >= LONG_WORD_CHARS) return WEIGHT.long
 
-  return WEIGHT.ordinary
+  const bare = bareWord(token)
+  if (isCommonplace(bare)) return WEIGHT.commonplace
+
+  return (
+    WEIGHT.distinctive + (bare.length >= LONG_WORD_CHARS ? LONG_WORD_BONUS : 0)
+  )
 }
 
-const isShouted = (token: string) => SHOUTED.test(strip(token))
+const isShouted = (token: string) => SHOUTED.test(bareWordPreservingCase(token))
+
+/** Only a word that *competes* can be picked from the ranking. */
+const competes = (word: Scored) => !isStopword(word.text) || isShouted(word.text)
+
+/**
+ * Emphasises the forced words, then the highest scorers until the budget runs
+ * out. The budget is what guarantees a phrase is never blank and never
+ * shouted — both of which the old threshold allowed.
+ */
+function spendBudget(words: Scored[]): Scored[] {
+  const budget = Math.max(1, Math.floor(words.length / WORDS_PER_EMPHASIS))
+
+  for (const word of words) {
+    if (word.forced) word.emphasis = true
+  }
+
+  const spent = words.filter((word) => word.emphasis).length
+  const remaining = budget - spent
+  if (remaining <= 0) return words
+
+  words
+    .filter((word) => !word.emphasis && competes(word))
+    // Anything not yet used outranks anything already emphasised, whatever
+    // their weights. A repeat is a last resort, not a discount — which is a
+    // rule, rather than a penalty constant that needs retuning.
+    .sort((a, b) => Number(a.repeat) - Number(b.repeat) || b.weight - a.weight)
+    .slice(0, remaining)
+    .forEach((word) => {
+      word.emphasis = true
+    })
+
+  return words
+}
+
+/**
+ * A sentence lands on its last real word, which deserves a tiebreak — not the
+ * automatic emphasis it used to get, which made the whole tool a punchline
+ * bolder rather than something that finds the argument.
+ */
+function nudgeClosingWord(words: Scored[]): void {
+  for (let index = words.length - 1; index >= 0; index--) {
+    const word = words[index]!
+    if (isStopword(word.text) || word.forced) continue
+
+    word.weight = Math.min(WEIGHT.numeric, word.weight + CLOSING_BONUS)
+    return
+  }
+}
 
 /**
  * Every position inside a closed quotation. An unclosed quote is left alone —
@@ -116,38 +196,8 @@ function quotedPositions(words: Word[]): Set<number> {
   return inside
 }
 
-/**
- * A sentence lands on its last real word. Stopwords are skipped rather than
- * lifted — "was" at the end of a sentence is still "was".
- */
-function liftClosingWord(words: Word[]): void {
-  for (let index = words.length - 1; index >= 0; index--) {
-    const word = words[index]!
-    if (isStopword(word.text)) continue
-
-    word.weight = Math.max(word.weight, WEIGHT.sentenceFinal)
-    return
-  }
-}
-
-/**
- * No frame goes by with nothing to look at.
- *
- * Without this the long-word signal is dead weight — it scores below the
- * threshold, so it can never fire on its own, and prose carrying no numbers
- * and no author marks comes out almost entirely flat. Lifting the single
- * strongest word in an otherwise silent phrase is the narrowest fix that
- * gives the signal somewhere to land.
- */
-function liftStrongestWord(words: Word[]): void {
-  if (words.some((word) => word.weight >= EMPHASIS_THRESHOLD)) return
-
-  const candidates = words.filter((word) => !isStopword(word.text))
-  if (candidates.length === 0) return
-
-  const strongest = candidates.reduce((best, word) =>
-    word.weight > best.weight ? word : best,
-  )
-  strongest.weight = WEIGHT.sentenceFinal
-}
-
+const stripScoring = ({
+  forced: _forced,
+  repeat: _repeat,
+  ...word
+}: Scored): Word => word

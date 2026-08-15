@@ -16,9 +16,18 @@ const STOPWORDS = new Set([
   'do', 'does', 'did', 'have', 'has', 'had',
   'will', 'would', 'can', 'could', 'should', 'may', 'might', 'must',
   'not', 'no', 'up', 'out', 'about', 'just', 'very',
+  // Interrogatives and determiners. These kept surfacing in review as
+  // emphasised words — they are grammar, not content.
+  'what', 'which', 'who', 'whom', 'whose', 'where', 'why', 'how', 'whether',
+  'such', 'own', 'only', 'also', 'even', 'ever', 'back', 'still', 'well',
+  'one', 'get', 'got', 'been',
 ])
 
-export const strip = (token: string) => token.replace(/[^\p{L}\p{N}'-]/gu, '')
+/** Punctuation removed, casing kept — shouting has to stay detectable. */
+export const bareWordPreservingCase = (token: string) =>
+  token.replace(/[^\p{L}\p{N}'-]/gu, '')
+
+export const strip = bareWordPreservingCase
 
 export const bareWord = (token: string) => strip(token).toLowerCase()
 

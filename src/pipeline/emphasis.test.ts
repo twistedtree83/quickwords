@@ -132,6 +132,114 @@ describe('prose without numbers still finds its anchors', () => {
   })
 })
 
+describe('emphasis lands on the words that carry meaning', () => {
+  it('prefers a distinctive word to a commonplace one', () => {
+    const words = allWords('the team fixed the observability problem')
+    const distinctive = words.find((w) => w.text === 'observability')!
+    const commonplace = words.find((w) => w.text === 'problem')!
+
+    expect(distinctive.emphasis).toBe(true)
+    expect(commonplace.emphasis).toBe(false)
+  })
+
+  it('does not simply bold the last word of every sentence', () => {
+    const text =
+      'we spent the whole quarter rebuilding the deployment pipeline. nobody outside the team noticed the difference.'
+    const closing = new Set(['pipeline.', 'difference.'])
+    const chosen = emphasised(text)
+
+    expect(chosen.some((word) => !closing.has(word))).toBe(true)
+  })
+
+  it('lets a number outrank an acronym beside it', () => {
+    // Previously "API" and "OK" both fired as shouting and crowded out the
+    // number, which is the only part of that sentence anyone cares about.
+    expect(emphasised('Our API returned 200 OK for every error')).toContain(
+      '200',
+    )
+  })
+})
+
+describe('emphasis does not land on the same word twice', () => {
+  // Corpus post p20, which review showed emphasising
+  // "technical announces technical announces" — four picks, two of them
+  // repeats. A repeat is allowed only as a last resort, when every competing
+  // word in the phrase has already had its moment, so this asserts that
+  // repeats are rare rather than absent.
+  it('gives a repeated word one moment, not every moment', () => {
+    const text =
+      'The thing about technical debt is that it never announces itself as technical debt, it announces itself as a two week estimate for something that used to take an afternoon'
+    const chosen = emphasised(text)
+    const repeats = chosen.length - new Set(chosen).size
+
+    expect(repeats).toBeLessThanOrEqual(1)
+  })
+
+  it('prefers an unused word to one already emphasised', () => {
+    const bare = (token: string) =>
+      token.replace(/[^\p{L}\p{N}'-]/gu, '').toLowerCase()
+    const text =
+      'The thing about technical debt is that it never announces itself as technical debt, it announces itself as a two week estimate for something that used to take an afternoon'
+
+    const seen = new Set<string>()
+    for (const phrase of score(text)) {
+      const repeated = phrase.words.filter(
+        (word) => word.emphasis && seen.has(bare(word.text)),
+      )
+
+      // A repeat is only defensible when the phrase had nothing else to offer.
+      if (repeated.length > 0) {
+        const unused = phrase.words.filter(
+          (word) => !seen.has(bare(word.text)) && word.weight > 0.1,
+        )
+        expect(unused).toHaveLength(0)
+      }
+
+      for (const word of phrase.words) {
+        if (word.emphasis) seen.add(bare(word.text))
+      }
+    }
+  })
+
+  it('still emphasises something in every phrase when words repeat', () => {
+    const text = 'measuring the wrong thing carefully beats measuring nothing.'
+
+    for (const phrase of score(text)) {
+      expect(phrase.words.some((word) => word.emphasis)).toBe(true)
+    }
+  })
+})
+
+describe('emphasis is spent to a budget, not sprayed', () => {
+  const ORDINARY =
+    'we spent the whole quarter rebuilding the deployment pipeline because the old one kept failing quietly whenever a column went missing'
+
+  it('emphasises no more than about a third of any phrase', () => {
+    for (const phrase of score(ORDINARY)) {
+      const chosen = phrase.words.filter((word) => word.emphasis).length
+      const budget = Math.max(1, Math.round(phrase.words.length / 3))
+
+      expect(chosen).toBeLessThanOrEqual(budget)
+    }
+  })
+
+  it('always gives a phrase at least one word to look at', () => {
+    for (const phrase of score(ORDINARY)) {
+      expect(phrase.words.some((word) => word.emphasis)).toBe(true)
+    }
+  })
+
+  it('never emphasises three words in a row', () => {
+    for (const phrase of score(ORDINARY)) {
+      let run = 0
+      for (const word of phrase.words) {
+        run = word.emphasis ? run + 1 : 0
+        expect(run).toBeLessThan(3)
+      }
+    }
+  })
+})
+
 describe('weights are usable numbers', () => {
   it('gives every word a weight between 0 and 1', () => {
     for (const word of allWords('the team shipped 12 features in April')) {
